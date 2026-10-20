@@ -156,16 +156,17 @@
 
 ### 安装 skill（Claude Code 和 Codex 都可以）
 
-这个 skill 就是一个顶层带 `SKILL.md` 的普通文件夹，Claude Code 和 OpenAI Codex 都能用。把文件夹复制到所用工具的 skills 目录（两个都用就各放一份）：
+这个 skill 就是一个顶层带 `SKILL.md` 的普通文件夹，Claude Code 和 OpenAI Codex 都能用。从 GitHub 直接下载到所用工具的 skills 目录（需要 `git`）：
 
 ```bash
-# Claude Code：~/.claude/skills/（所有项目可用）或 <项目>/.claude/skills/（只在这个项目里用）
-cp -r spatial-downstream ~/.claude/skills/
+# Claude Code（所有项目可用）
+git clone https://github.com/alexpengyl1/spatial-downstream.git ~/.claude/skills/spatial-downstream
 
-# Codex：~/.codex/skills/
-mkdir -p ~/.codex/skills
-cp -r spatial-downstream ~/.codex/skills/
+# Codex
+git clone https://github.com/alexpengyl1/spatial-downstream.git ~/.codex/skills/spatial-downstream
 ```
+
+只想在某个项目里用 Claude Code 时，改成克隆到 `<项目>/.claude/skills/spatial-downstream`。没有 `git` 的话，在 GitHub 页面点 **Code → Download ZIP**，解压后把文件夹改名为 `spatial-downstream`，放进上面的 skills 目录。以后更新：`git -C ~/.claude/skills/spatial-downstream pull`。
 
 只想保留一份时，装到其中一个，再链接到另一个，例如 `ln -s ~/.claude/skills/spatial-downstream ~/.codex/skills/spatial-downstream`。装好后重启工具，它会根据 `SKILL.md` 里的 `name` 和 `description` 识别这个 skill；之后直接说"用单细胞参考分析我的 Visium 数据"之类即可。
 

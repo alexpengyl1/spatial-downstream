@@ -156,16 +156,17 @@ Rules of thumb, checked against how the course scripts handle samples: **steps t
 
 ### Install the skill (Claude Code or Codex)
 
-The skill is a plain folder with a `SKILL.md` at its top, so it works with both Claude Code and OpenAI Codex. Copy the folder into the skills directory of the tool you use (or both):
+The skill is a plain folder with a `SKILL.md` at its top, so it works with both Claude Code and OpenAI Codex. Download it from GitHub straight into the skills directory of the tool you use (needs `git`):
 
 ```bash
-# Claude Code: ~/.claude/skills/ (all projects) or <project>/.claude/skills/ (one project)
-cp -r spatial-downstream ~/.claude/skills/
+# Claude Code (all projects)
+git clone https://github.com/alexpengyl1/spatial-downstream.git ~/.claude/skills/spatial-downstream
 
-# Codex: ~/.codex/skills/
-mkdir -p ~/.codex/skills
-cp -r spatial-downstream ~/.codex/skills/
+# Codex
+git clone https://github.com/alexpengyl1/spatial-downstream.git ~/.codex/skills/spatial-downstream
 ```
+
+For one project only in Claude Code, clone into `<project>/.claude/skills/spatial-downstream` instead. Without `git`, use **Code → Download ZIP** on the GitHub page, unzip it, rename the folder to `spatial-downstream` and move it into the skills directory above. To update later: `git -C ~/.claude/skills/spatial-downstream pull`.
 
 To keep one copy for both tools, install it for one and link it into the other, e.g. `ln -s ~/.claude/skills/spatial-downstream ~/.codex/skills/spatial-downstream`. Restart the tool afterwards; it picks the skill up from the `name` and `description` in `SKILL.md`. Ask it, for example, "analyse my Visium data with a scRNA-seq reference".
 
