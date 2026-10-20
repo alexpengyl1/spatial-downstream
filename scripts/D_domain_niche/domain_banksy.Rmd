@@ -1,0 +1,149 @@
+---
+title: "BANKSY 空间域"
+subtitle: "模块 D：Python 导出 → R 运行 BANKSY → Python 读回（domain_cellcharter.py 的 R 版替代）"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: show
+    df_print: kable
+params:
+  project_dir: "."
+  lambda: 0.8
+  resolution: 0.8
+---
+
+```{r setup, include=FALSE}
+# 步骤：加载反复用到的包，把工作目录设为项目目录
+# 输入：params$project_dir
+# 输出：无
+library(Matrix)
+knitr::opts_knit$set(root.dir = params$project_dir)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# 概述
+
+BANKSY 把每个细胞自己的表达和它空间邻居的表达拼在一起再聚类，得到空间域。对应课程第 12 课。
+
+1. 读取配置和 BANKSY 参数
+2. 读入 Python 导出的 counts、元数据和 µm 坐标
+3. 把各样本的坐标错开，避免邻居跨样本
+4. 构建 SpatialExperiment，log 标准化，选高变基因
+5. 计算 BANKSY 特征、PCA、聚类
+6. 保存每个细胞的空间域
+
+输入是 `bridge/h5ad_to_mtx.py` 写出的 `results/exchange/`；输出 `banksy_domain.csv` 由 `bridge/import_obs_csv.py` 读回，写成 `04_domain.h5ad`。
+
+**多样本**：BANKSY 只看坐标，所以先按官方多样本做法把各样本坐标沿 x 方向错开，再在所有样本上一起计算和聚类，空间域编号跨样本可比。
+
+**参数**：`lambda` 控制邻居表达的权重。官方建议空间域用 0.8；改成 0.2 时，结果更接近细胞类型。`resolution` 控制聚类的粗细。两个参数都可以在 YAML 的 `params` 里改。
+
+# 读取配置
+
+```{r}
+# 步骤：读取配置，设定 BANKSY 参数
+# 输入：config.yaml、params
+# 输出：cfg、exchange_dir、lambda、resolution、k_geom；打印的设置表
+cfg <- yaml::read_yaml("config.yaml")
+exchange_dir <- file.path(cfg$out_dir, "exchange")
+lambda <- params$lambda
+resolution <- params$resolution
+k_geom <- c(15, 30)
+data.frame(setting = c("lambda", "resolution", "k_geom", "seed"),
+           value = c(lambda, resolution, paste(k_geom, collapse = ", "), cfg$seed))
+```
+
+# 读入数据
+
+```{r}
+# 步骤：读入 Python 导出的 counts（基因 x 细胞）、元数据和 µm 坐标
+# 输入：results/exchange/ 下的 counts.mtx、genes.txt、barcodes.txt、obs.csv、coords.csv
+# 输出：counts、obs、coords；打印的数据大小
+counts <- as(readMM(file.path(exchange_dir, "counts.mtx")), "CsparseMatrix")
+rownames(counts) <- readLines(file.path(exchange_dir, "genes.txt"))
+colnames(counts) <- readLines(file.path(exchange_dir, "barcodes.txt"))
+obs <- read.csv(file.path(exchange_dir, "obs.csv"), row.names = 1)
+coords <- as.matrix(read.csv(file.path(exchange_dir, "coords.csv"), row.names = 1))
+data.frame(object = c("counts", "obs", "coords"),
+           rows = c(nrow(counts), nrow(obs), nrow(coords)),
+           columns = c(ncol(counts), ncol(obs), ncol(coords)))
+```
+
+导出时三份文件的条形码顺序相同，这里确认一下，并看每个样本有多少细胞。
+
+```{r}
+# 步骤：检查条形码顺序一致，查看每个样本的细胞数
+# 输入：counts、obs、coords
+# 输出：打印的检查表和样本表
+data.frame(check = c("obs 与 counts 条形码一致", "coords 与 counts 条形码一致"),
+           value = c(identical(rownames(obs), colnames(counts)), identical(rownames(coords), colnames(counts))))
+table(obs$sample)
+```
+
+# 错开各样本的坐标
+
+每个样本向右平移"切片宽度的 1.5 倍"乘以样本序号，这样不同样本之间至少隔开半个切片宽，邻居不会跨样本。
+
+```{r}
+# 步骤：把不同样本的坐标沿 x 方向错开
+# 输入：coords、obs$sample
+# 输出：coords（错开后）
+offset <- (max(coords[, 1]) - min(coords[, 1])) * 1.5
+coords[, 1] <- coords[, 1] + (as.integer(factor(obs$sample)) - 1) * offset
+```
+
+# 构建 SpatialExperiment
+
+全转录组数据只保留 2000 个高变基因以加快计算；靶向 panel（基因数 ≤ 1000）全部保留。
+
+```{r}
+# 步骤：构建 SpatialExperiment 并做 log 标准化
+# 输入：counts、obs、coords
+# 输出：se
+se <- SpatialExperiment::SpatialExperiment(assays = list(counts = counts), colData = obs, spatialCoords = coords)
+se <- scuttle::logNormCounts(se)
+```
+
+```{r}
+# 步骤：全转录组时只保留 2000 个高变基因
+# 输入：se
+# 输出：se（基因更少）；打印的大小
+if (nrow(se) > 1000) se <- se[scran::getTopHVGs(scran::modelGeneVar(se), n = 2000), ]
+dim(se)
+```
+
+# 运行 BANKSY
+
+`scuttle` 会提示 `librarySizeFactors`、`normalizeCounts` 已弃用（建议改用 scrapper），这只是提醒，不影响结果。
+
+```{r}
+# 步骤：计算 BANKSY 邻居特征、PCA、聚类
+# 输入：se、lambda、resolution、k_geom
+# 输出：se（colData 里多了 clust_* 列）
+se <- Banksy::computeBanksy(se, assay_name = "logcounts", compute_agf = TRUE, k_geom = k_geom)
+se <- Banksy::runBanksyPCA(se, use_agf = TRUE, lambda = lambda, seed = cfg$seed)
+se <- Banksy::clusterBanksy(se, use_agf = TRUE, lambda = lambda, resolution = resolution, seed = cfg$seed)
+```
+
+# 保存结果
+
+```{r}
+# 步骤：取出聚类结果，保存为 domain 列
+# 输入：se
+# 输出：results/exchange/banksy_domain.csv（条形码, domain）；打印每个样本各空间域的细胞数
+cluster_col <- grep("^clust", colnames(SummarizedExperiment::colData(se)), value = TRUE)[1]
+domain <- data.frame(domain = SummarizedExperiment::colData(se)[[cluster_col]], row.names = colnames(se))
+write.csv(domain, file.path(exchange_dir, "banksy_domain.csv"))
+table(sample = obs[rownames(domain), "sample"], domain = domain$domain)
+```
+
+下一步：在 Python 里运行 `bridge/import_obs_csv.py`，把 `domain` 按条形码合并进 h5ad。
+
+# 会话信息
+
+```{r}
+sessionInfo()
+```

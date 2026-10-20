@@ -1,0 +1,8 @@
+# 没有单细胞参考时用的 marker 基因表：细胞类型 -> 基因列表
+# 靶向 panel（Xenium/CosMx）只能写 panel 里有的基因；CODEX 写抗体（marker）名称。
+T cells: [CD3D, CD3E, CD2]
+B cells: [MS4A1, CD79A, CD19]
+Myeloid: [CD68, CD163, LYZ]
+Fibroblasts: [COL1A1, DCN, LUM]
+Endothelial: [PECAM1, VWF, CDH5]
+Epithelial: [EPCAM, KRT8, KRT18]

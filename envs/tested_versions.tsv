@@ -1,0 +1,33 @@
+language	package	version	tested_on	used_by
+Python	python	3.10.20	2026-10-19 macOS arm64	all Python scripts
+Python	scanpy	1.11.5	2026-10-19 macOS arm64	A–G
+Python	anndata	0.11.4	2026-10-19 macOS arm64	A–G
+Python	squidpy	1.6.5	2026-10-19 macOS arm64	D, E, G
+Python	numpy	1.26.4	2026-10-19 macOS arm64	all
+Python	pandas	2.3.3	2026-10-19 macOS arm64	all
+Python	scipy	1.11.4	2026-10-19 macOS arm64	all
+Python	scikit-learn	1.7.2	2026-10-19 macOS arm64	C, D, G
+Python	harmonypy	0.0.10	2026-10-19 macOS arm64	B, C
+Python	liana	1.10.0	2026-10-19 macOS arm64	E, F
+Python	infercnvpy	0.6.1	2026-10-19 macOS arm64	G (CNV)
+Python	gtfparse	2.5.0	2026-10-19 macOS arm64	G (CNV)
+Python	cellcharter	0.3.5	2026-10-19 macOS arm64	D (domain)
+Python	esda	2.7.0	2026-10-19 macOS arm64	G (hotspot)
+Python	libpysal	4.13.0	2026-10-19 macOS arm64	G (hotspot)
+Python	torch	2.7.1	2026-10-19 macOS arm64	cellcharter dependency
+R	R	4.6.1	2026-10-19 macOS arm64	R scripts
+R	Bioconductor	3.23	2026-10-19 macOS arm64	R scripts
+R	spacexr	2.2.1	2026-10-19 macOS arm64	C (RCTD)
+R	Banksy	1.8.1	2026-10-19 macOS arm64	D (BANKSY)
+R	SpatialExperiment	1.22.0	2026-10-19 macOS arm64	D (BANKSY)
+R	scuttle	1.22.0	2026-10-19 macOS arm64	D (BANKSY)
+R	scran	1.40.0	2026-10-19 macOS arm64	D (BANKSY)
+R	Matrix	1.7.5	2026-10-19 macOS arm64	bridge
+R	yaml	2.3.12	2026-10-19 macOS arm64	config
+Python	jsonschema	4.23.0	2026-10-19 macOS arm64	Z (validate_config)
+Python	jupyterlab	4.6.4	2026-10-20 macOS arm64	notebooks
+Python	ipykernel	7.2.0	2026-10-20 macOS arm64	notebooks
+Python	nbconvert	7.17.2	2026-10-20 macOS arm64	notebooks (tests)
+R	rmarkdown	2.32	2026-10-20 macOS arm64	R Markdown reports
+R	knitr	1.52	2026-10-20 macOS arm64	R Markdown reports
+R	SeuratObject	5.4.0	2026-10-20 macOS arm64	seurat_to_mtx.Rmd

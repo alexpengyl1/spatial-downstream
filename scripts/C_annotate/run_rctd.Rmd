@@ -1,0 +1,154 @@
+---
+title: "RCTD 去卷积与注释"
+subtitle: "模块 C · 第 2 步（共 3 步）：Python 导出 → R 运行 RCTD → Python 读回"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: show
+    df_print: kable
+params:
+  project_dir: "."
+---
+
+```{r setup, include=FALSE}
+# 步骤：加载反复用到的包，把工作目录设为项目目录
+# 输入：params$project_dir
+# 输出：无
+library(Matrix)
+knitr::opts_knit$set(root.dir = params$project_dir)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# 概述
+
+这一步用 RCTD（spacexr 包）把单细胞参考里的细胞类型映射到空间数据上，得到每个 spot / bin 的细胞类型比例。对应课程第 4、5、13 课。
+
+1. 读取配置，按模式设定 UMI 阈值
+2. 读入单细胞参考，构建 Reference
+3. 逐个样本读入空间 counts 和 µm 坐标
+4. 逐个样本运行 RCTD
+5. 保存每个样本的细胞类型比例
+
+输入是 `export_for_rctd.py` 写出的 `results/rctd/`；输出由 `import_rctd.py` 读回 Python，写成 `03_annotated.h5ad`。
+
+**多样本**：RCTD 每次拟合一张切片的平台效应，所以逐个样本运行；所有样本共用同一份单细胞参考，细胞类型一致，结果可以直接合并比较。
+
+**安装**（只需要一次）：`envs/install_r_packages.R`。
+
+# 读取配置
+
+Visium 用 `full` 模式（一个 spot 里有多种细胞），Visium HD 16 µm 用 `doublet` 模式（一个 bin 里最多两种细胞）。HD bin 和单细胞级数据只有几十到几百个 UMI，用 RCTD 默认的 UMI 阈值会报 "choose_sigma_c determined a N_fit of 0"，所以 doublet 模式调低阈值。
+
+```{r}
+# 步骤：读取配置，设定 UMI 阈值
+# 输入：config.yaml
+# 输出：cfg、rctd_dir、umi_min、umi_min_sigma；打印的设置表
+cfg <- yaml::read_yaml("config.yaml")
+rctd_dir <- file.path(cfg$out_dir, "rctd")
+umi_min <- if (cfg$rctd_mode == "doublet") 20 else 100
+umi_min_sigma <- if (cfg$rctd_mode == "doublet") 100 else 300
+data.frame(setting = c("rctd_mode", "UMI_min", "UMI_min_sigma", "threads"),
+           value = c(cfg$rctd_mode, umi_min, umi_min_sigma, cfg$threads))
+```
+
+# 读入单细胞参考
+
+参考是 `prepare_reference.py` 下采样后的原始 counts（每类最多 1000 个细胞，少于 25 个细胞的类型已去掉）。
+
+```{r}
+# 步骤：读入参考 counts（基因 x 细胞）和细胞类型
+# 输入：results/rctd/reference/ 下的 counts.mtx、genes.txt、barcodes.txt、cell_types.csv
+# 输出：ref_counts、cell_types；打印每类细胞数
+ref_counts <- as(readMM(file.path(rctd_dir, "reference", "counts.mtx")), "CsparseMatrix")
+rownames(ref_counts) <- readLines(file.path(rctd_dir, "reference", "genes.txt"))
+colnames(ref_counts) <- readLines(file.path(rctd_dir, "reference", "barcodes.txt"))
+ref_meta <- read.csv(file.path(rctd_dir, "reference", "cell_types.csv"), row.names = 1)
+cell_types <- factor(ref_meta[colnames(ref_counts), "cell_type"])
+names(cell_types) <- colnames(ref_counts)
+table(cell_types)
+```
+
+```{r}
+# 步骤：构建 RCTD 的 Reference 对象
+# 输入：ref_counts、cell_types
+# 输出：reference
+reference <- spacexr::Reference(ref_counts, cell_types, colSums(ref_counts))
+```
+
+# 读入各样本的空间数据
+
+每个样本一个目录，坐标已经是 µm。
+
+```{r}
+# 步骤：逐个样本读入空间 counts 和 µm 坐标，构建 SpatialRNA 对象
+# 输入：results/rctd/spatial/<样本>/ 下的 counts.mtx、genes.txt、barcodes.txt、coords.csv
+# 输出：pucks（样本目录 -> SpatialRNA）
+sample_dirs <- list.dirs(file.path(rctd_dir, "spatial"), recursive = FALSE)
+pucks <- list()
+for (sample_dir in sample_dirs) {
+  counts <- as(readMM(file.path(sample_dir, "counts.mtx")), "CsparseMatrix")
+  rownames(counts) <- readLines(file.path(sample_dir, "genes.txt"))
+  colnames(counts) <- readLines(file.path(sample_dir, "barcodes.txt"))
+  coords <- read.csv(file.path(sample_dir, "coords.csv"), row.names = 1)
+  pucks[[sample_dir]] <- spacexr::SpatialRNA(coords, counts, colSums(counts))
+}
+```
+
+```{r}
+# 步骤：查看每个样本的 spot / bin 数和中位 UMI
+# 输入：pucks
+# 输出：打印的样本表
+data.frame(sample = basename(sample_dirs),
+           spots = sapply(pucks, function(p) ncol(p@counts)),
+           median_umi = sapply(pucks, function(p) median(p@nUMI)), row.names = NULL)
+```
+
+# 运行 RCTD
+
+这一步最慢：1 万个 bin、4 核的 doublet 模式约 3.5 分钟，几十万个 bin 要按小时算。运行时会打印各个 worker 的启动信息，不是报错。
+
+```{r, results="hide"}
+# 步骤：逐个样本运行 RCTD
+# 输入：pucks、reference
+# 输出：rctd_results（样本目录 -> RCTD 对象）
+rctd_results <- list()
+for (sample_dir in sample_dirs) {
+  rctd <- spacexr::create.RCTD(pucks[[sample_dir]], reference, max_cores = cfg$threads,
+                               UMI_min = umi_min, UMI_min_sigma = umi_min_sigma)
+  rctd_results[[sample_dir]] <- spacexr::run.RCTD(rctd, doublet_mode = cfg$rctd_mode)
+}
+```
+
+# 保存结果
+
+每个样本保存归一化后的细胞类型比例；doublet 模式再保存 first_type / second_type。`import_rctd.py` 会按条形码把它们读回 h5ad。
+
+```{r}
+# 步骤：保存每个样本的细胞类型比例（doublet 模式再保存 results_df）
+# 输入：rctd_results
+# 输出：每个样本目录下的 weights.csv（以及 results_df.csv）
+for (sample_dir in sample_dirs) {
+  results <- rctd_results[[sample_dir]]@results
+  write.csv(as.matrix(spacexr::normalize_weights(results$weights)), file.path(sample_dir, "weights.csv"))
+  if (cfg$rctd_mode == "doublet") write.csv(results$results_df, file.path(sample_dir, "results_df.csv"))
+}
+```
+
+```{r}
+# 步骤：列出写出的文件（RCTD 会去掉 UMI 太少的 spot，所以行数可能比输入少）
+# 输入：results/rctd/spatial/*/weights.csv
+# 输出：打印的文件表
+weights_files <- file.path(sample_dirs, "weights.csv")
+data.frame(file = weights_files,
+           rows = sapply(weights_files, function(f) nrow(read.csv(f))),
+           cell_types = sapply(weights_files, function(f) ncol(read.csv(f)) - 1), row.names = NULL)
+```
+
+# 会话信息
+
+```{r}
+sessionInfo()
+```

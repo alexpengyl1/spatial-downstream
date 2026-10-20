@@ -1,0 +1,5 @@
+sample	condition	path
+S1	Control	/data/visium/S1/outs
+S2	Control	/data/visium/S2/outs
+S3	Treated	/data/visium/S3/outs
+S4	Treated	/data/visium/S4/outs

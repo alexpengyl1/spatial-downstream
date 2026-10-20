@@ -1,0 +1,39 @@
+# 空间转录组下游分析 · 项目配置
+# 复制到项目目录，命名为 config.yaml；所有脚本都在项目目录下运行，并读取这个文件。
+
+# ---- 流程 ----
+pipeline: P1_lowres_scrna  # P1_lowres_scrna | P2_lowres_noref | P3_hd_scrna | P4_hd_noref | P5_imaging_scrna | P6_imaging_noref | P7_protein
+
+# ---- 数据 ----
+platform: visium          # visium | visium_hd | stereo | slideseq | xenium | cosmx | merscope | codex | imc
+resolution: spot          # spot（低精度，spot 里混有多个细胞）| cell（单细胞级，含 HD 8/16µm、Stereo-seq cellbin）
+samples: samples.tsv      # 三列：sample  condition  path
+species: human            # human | mouse
+out_dir: results
+
+# ---- 平台相关 ----
+hd_bin_um: 16             # Visium HD 用哪个 bin（2 / 8 / 16）
+stereo_bin_size: 50       # Stereo-seq 的 bin 大小（bin50 = 25µm，按低精度处理；bin20 及以下按高精度处理）
+stereo_um_per_unit: 0.5   # Stereo-seq 坐标单位换算成 µm（DNB 中心距 0.5µm，请按芯片说明核对）
+pixel_size_um: 0.12028    # CosMx ≈ 0.12028；CODEX 按显微镜实际像素大小填写（常见 0.377）
+
+# ---- 单细胞参考 ----
+scrna_reference: ref/scrna.h5ad     # 有参考时填 h5ad 路径（需要原始 counts），没有就写 null
+scrna_celltype_key: cell_type
+scrna_batch_key: null     # 参考数据的样本或批次列（cell2location 会用到），没有就写 null
+annotation_method: rctd   # rctd | cell2location | label_transfer | markers
+rctd_mode: full           # Visium 用 full；HD 16µm 用 doublet
+markers: markers.yaml     # 没有参考时用的 marker 基因表
+
+# ---- 通用参数 ----
+seed: 42
+threads: 8
+leiden_resolution: 0.5
+radius_um: 100             # 单细胞级平台的邻域半径（µm）
+n_niches: 8               # niche / CN 的个数（KMeans）
+condition_key: condition
+composition_key: cell_props   # 低精度平台用哪个 obsm 当细胞组成：cell_props（去卷积）或 cell_scores（marker 打分）
+
+# ---- 个性化分析 ----
+gtf: null                 # CNV 需要的基因注释 GTF
+cnv_reference: []         # 正常参考细胞类型，比如 [T cells, B cells]

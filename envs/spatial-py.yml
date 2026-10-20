@@ -1,0 +1,42 @@
+# 主 Python 环境：模块 A–G 的大多数脚本 / Main Python environment for modules A–G
+# 版本是 2026-10-19 在 macOS arm64 上实际测试通过的组合（见 envs/tested_versions.tsv）
+# Versions below are the combination tested on macOS arm64 on 2026-10-19 (see envs/tested_versions.tsv)
+# 安装 / install：conda env create -f spatial-py.yml
+name: spatial-py
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - scanpy==1.11.5
+      - anndata==0.11.4
+      - squidpy==1.6.5
+      - numpy==1.26.4
+      - pandas==2.3.3
+      - scipy==1.11.4
+      - scikit-learn==1.7.2
+      - matplotlib==3.10.9
+      - seaborn==0.13.2
+      - harmonypy==0.0.10     # 0.2 及以后改了输出方向，scanpy 1.11 的 harmony_integrate 会报形状错误
+      - leidenalg==0.12.0
+      - igraph==1.0.0
+      - pyarrow==14.0.2       # 读 Xenium / Visium HD 的 parquet
+      - pyyaml==6.0.3
+      - liana==1.10.0         # MISTy、空间配受体、CellPhoneDB
+      - infercnvpy==0.6.1     # 空间 CNV
+      - gtfparse==2.5.0       # infercnvpy 0.6 需要 2.x（3.x 返回格式变了）
+      - cellcharter==0.3.5    # 空间域（会装 torch）
+      - esda==2.7.0           # Getis-Ord 热点
+      - libpysal==4.13.0
+      - jsonschema==4.23.0    # 检查 config.yaml
+      - jupyterlab==4.6.4     # 打开 notebooks/ 里的笔记本
+      - ipykernel==7.2.0
+      - nbconvert==7.17.2     # 命令行执行笔记本（可选）
+
+# 以下工具依赖冲突较多，各自单独建环境，只在对应步骤用（未在本 skill 中实测）：
+# These tools conflict with the main env; use separate envs (not tested in this skill):
+#   cell2location：conda create -n cell2location python=3.10 && pip install cell2location[tutorials]
+#   commot：       conda create -n commot python=3.10 && pip install commot
+#   stereopy：     conda create -n stereo -c stereopy -c conda-forge stereopy
+#   SOAPy：        conda create -n soapy python=3.9 && pip install SOAPy-st

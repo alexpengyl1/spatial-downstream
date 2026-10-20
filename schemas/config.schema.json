@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/spatial-downstream/schemas/config.schema.json",
+  "title": "spatial-downstream project config",
+  "description": "config.yaml 的结构定义 / Structure of config.yaml. validate_config.py 在每套流程开始时用它检查配置。",
+  "type": "object",
+  "required": ["pipeline", "platform", "resolution", "samples", "species", "out_dir", "annotation_method", "seed", "threads"],
+  "properties": {
+    "pipeline": {"enum": ["P1_lowres_scrna", "P2_lowres_noref", "P3_hd_scrna", "P4_hd_noref", "P5_imaging_scrna", "P6_imaging_noref", "P7_protein"], "description": "使用的流程 / pipeline id"},
+    "platform": {"enum": ["visium", "visium_hd", "stereo", "slideseq", "xenium", "cosmx", "merscope", "codex", "imc"]},
+    "resolution": {"enum": ["spot", "cell"], "description": "spot = 一个点含多个细胞；cell = 单细胞级"},
+    "samples": {"type": "string", "description": "样本表 TSV：sample, condition, path"},
+    "species": {"enum": ["human", "mouse"]},
+    "out_dir": {"type": "string"},
+    "hd_bin_um": {"enum": [2, 8, 16]},
+    "stereo_bin_size": {"type": "integer", "minimum": 1},
+    "stereo_um_per_unit": {"type": "number", "exclusiveMinimum": 0},
+    "pixel_size_um": {"type": "number", "exclusiveMinimum": 0},
+    "scrna_reference": {"type": ["string", "null"], "description": "单细胞参考 h5ad（原始 counts）"},
+    "scrna_celltype_key": {"type": "string"},
+    "scrna_batch_key": {"type": ["string", "null"]},
+    "annotation_method": {"enum": ["rctd", "cell2location", "label_transfer", "markers"]},
+    "rctd_mode": {"enum": ["full", "doublet", "multi"]},
+    "markers": {"type": "string"},
+    "seed": {"type": "integer"},
+    "threads": {"type": "integer", "minimum": 1},
+    "leiden_resolution": {"type": "number", "exclusiveMinimum": 0},
+    "radius_um": {"type": "number", "exclusiveMinimum": 0},
+    "n_niches": {"type": "integer", "minimum": 2},
+    "condition_key": {"type": "string"},
+    "composition_key": {"enum": ["cell_props", "cell_scores"]},
+    "gtf": {"type": ["string", "null"]},
+    "cnv_reference": {"type": "array", "items": {"type": "string"}}
+  },
+  "allOf": [
+    {"if": {"properties": {"annotation_method": {"enum": ["rctd", "cell2location", "label_transfer"]}}},
+     "then": {"properties": {"scrna_reference": {"type": "string"}}}},
+    {"if": {"properties": {"pipeline": {"enum": ["P1_lowres_scrna", "P2_lowres_noref"]}}},
+     "then": {"properties": {"resolution": {"const": "spot"}}}},
+    {"if": {"properties": {"pipeline": {"enum": ["P3_hd_scrna", "P4_hd_noref", "P5_imaging_scrna", "P6_imaging_noref", "P7_protein"]}}},
+     "then": {"properties": {"resolution": {"const": "cell"}}}}
+  ]
+}

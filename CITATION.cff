@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata, and cite the individual methods listed in README.md."
+title: "spatial-downstream: downstream analysis pipelines for spatial transcriptomics and spatial proteomics"
+version: 1.0.0
+date-released: 2026-10-19
+license: MIT
+type: software
+authors:
+  - given-names: Yueling
+    family-names: Peng
+    email: pengyueling1@gmail.com
+# doi: 10.5281/zenodo.XXXXXXX   # add after archiving a release on Zenodo
+# repository-code: https://github.com/<user>/spatial-downstream
+keywords:
+  - spatial transcriptomics
+  - spatial proteomics
+  - Visium
+  - Visium HD
+  - Stereo-seq
+  - Xenium
+  - CosMx
+  - CODEX
+  - deconvolution
+  - RCTD
+  - spatial domain
+  - cell niche
+  - cellular neighborhood
+  - cell-cell communication
+  - scanpy
+  - squidpy
+  - FAIR

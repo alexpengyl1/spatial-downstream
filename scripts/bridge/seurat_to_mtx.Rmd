@@ -1,0 +1,97 @@
+---
+title: "Seurat 对象导出给 Python"
+subtitle: "桥接 · R → 文件：之后用 bridge/mtx_to_h5ad.py 组装成 h5ad"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: show
+    df_print: kable
+params:
+  project_dir: "."
+  rds_file: "ref/scrna_seurat.rds"
+  exchange_dir: "results/exchange_seurat"
+  assay: "RNA"
+  spatial: false
+---
+
+```{r setup, include=FALSE}
+# 步骤：加载反复用到的包，把工作目录设为项目目录
+# 输入：params$project_dir
+# 输出：无
+library(Matrix)
+knitr::opts_knit$set(root.dir = params$project_dir)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# 概述
+
+手上的单细胞参考（或空间数据）是 Seurat 的 rds，但下一步要在 Python 里做 cell2location 或标签转移时，用这份报告把它导出成两边都能读的普通文件：
+
+1. 读入 Seurat 对象，取出原始 counts
+2. 写出 counts（Matrix Market，基因 x 细胞）、基因名、条形码、元数据
+3. 如果是空间对象，再写出坐标
+
+之后在 Python 里运行 `bridge/mtx_to_h5ad.py`，组装成 h5ad，交给 `prepare_reference.py`。
+
+**参数**（在 YAML 的 `params` 里改）：`rds_file` 是输入文件，`exchange_dir` 是输出目录；`assay` 对单细胞一般是 `RNA`，Visium 是 `Spatial`，Visium HD 是 `Spatial.016um`；空间对象把 `spatial` 设为 `true`。
+
+**安装**：需要 `SeuratObject`（空间对象写坐标时还需要 `Seurat`）。
+
+# 读入 Seurat 对象
+
+Seurat v5 用 `LayerData()` 取 counts；Seurat v4 的对象请改成 `SeuratObject::GetAssayData(obj, assay = params$assay, slot = "counts")`。
+
+```{r}
+# 步骤：读入 Seurat 对象，取出原始 counts
+# 输入：params$rds_file
+# 输出：obj、counts（基因 x 细胞）；打印的大小
+obj <- readRDS(params$rds_file)
+counts <- SeuratObject::LayerData(obj, assay = params$assay, layer = "counts")
+dim(counts)
+```
+
+```{r}
+# 步骤：查看元数据的前几行（确认细胞类型列的名字，之后写进 config.yaml 的 scrna_celltype_key）
+# 输入：obj@meta.data
+# 输出：打印的表
+head(obj@meta.data)
+```
+
+# 写出交换文件
+
+```{r}
+# 步骤：写出 counts、基因名、条形码、元数据
+# 输入：counts、obj@meta.data
+# 输出：exchange_dir 下的 counts.mtx、genes.txt、barcodes.txt、obs.csv
+dir.create(params$exchange_dir, recursive = TRUE, showWarnings = FALSE)
+writeMM(counts, file.path(params$exchange_dir, "counts.mtx"))
+writeLines(rownames(counts), file.path(params$exchange_dir, "genes.txt"))
+writeLines(colnames(counts), file.path(params$exchange_dir, "barcodes.txt"))
+write.csv(obj@meta.data, file.path(params$exchange_dir, "obs.csv"))
+```
+
+空间对象才需要这一步（`spatial: true` 时运行）。`GetTissueCoordinates()` 给的是全分辨率像素坐标，在 Python 里乘以 µm/像素换算（见 `references/units_and_params.md`）。
+
+```{r, eval=params$spatial}
+# 步骤：空间对象再写出坐标
+# 输入：obj
+# 输出：exchange_dir 下的 coords.csv（像素坐标）
+write.csv(Seurat::GetTissueCoordinates(obj)[, c("x", "y")], file.path(params$exchange_dir, "coords.csv"))
+```
+
+```{r}
+# 步骤：列出写出的文件
+# 输入：exchange_dir
+# 输出：打印的文件表
+data.frame(file = list.files(params$exchange_dir),
+           size_kb = round(file.size(list.files(params$exchange_dir, full.names = TRUE)) / 1024, 1))
+```
+
+# 会话信息
+
+```{r}
+sessionInfo()
+```
