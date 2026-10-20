@@ -58,6 +58,55 @@ bash "$SKILL_DIR"/pipelines/P1_lowres_scrna.sh
 | F 通讯 | `F_communication/lr_spatial_liana.py`（所有 RNA 平台）<br>`ligrec_neighborhood.py`（单细胞级）<br>`commot_flow.py`（低精度、看方向） | Py | `05_niche.h5ad` → 图和表 |
 | G 个性化 | `G_special/cnv_infercnvpy.py`、`svg_moran.py`、`hotspot_getis.py`、`nmf_programs.py`、`nmf_subtype.py`、`spatial_tendency_soapy.py` | Py | `05_niche.h5ad` → 图和表 |
 
+## 使用示例：4 个 Visium 样本 + 单细胞参考
+
+用户的请求：
+
+> 我有 4 个人肿瘤的 Visium 样本，2 个对照、2 个处理，还有一份同组织的单细胞数据 `ref/scrna.h5ad`（原始 counts，细胞类型在 `cell_type` 列）。想看处理之后肿瘤周围的免疫细胞组成有没有变化。
+
+**1. 选路线。** Visium 是 spot 级数据，又有单细胞参考，所以用 P1：RCTD 去卷积得到每个 spot 的细胞比例，再按比例找 niche。回复时用一句话说明为什么不是 P2（有参考就不用 marker 打分）。
+
+**2. 建项目。**
+
+```bash
+SKILL_DIR=~/.claude/skills/spatial-downstream      # 在 Codex 里是 ~/.codex/skills/spatial-downstream
+mkdir tumor_visium && cd tumor_visium
+cp "$SKILL_DIR"/assets/configs/P1_lowres_scrna.yaml config.yaml
+cp "$SKILL_DIR"/assets/samples_template.tsv samples.tsv
+cp "$SKILL_DIR"/assets/markers_template.yaml markers.yaml
+```
+
+`samples.tsv` 每行一个样本，`path` 指向 Space Ranger 的 `outs/` 目录：
+
+```
+sample	condition	path
+C1	Control	/data/visium/C1/outs
+C2	Control	/data/visium/C2/outs
+T1	Treated	/data/visium/T1/outs
+T2	Treated	/data/visium/T2/outs
+```
+
+`config.yaml` 只需核对 `species: human`、`scrna_reference: ref/scrna.h5ad`、`scrna_celltype_key: cell_type`；`n_niches` 先用默认的 8，看过 niche 图再调。
+
+**3. 运行。** `bash "$SKILL_DIR"/pipelines/P1_lowres_scrna.sh`。跑完先看 `results/qc_violin.png`，过滤阈值不合适就改 `preprocess_rna.py` 顶部的参数，从这一步重跑。
+
+**4. 用哪些结果回答问题。**
+
+| 问题 | 看哪里（都在 `results/`） |
+|---|---|
+| 每个 spot 里有哪些细胞 | `03_annotated.h5ad` 的 `obsm['cell_props']`；RCTD 报告 `reports/run_rctd.html` |
+| 有哪几类微环境，各由什么细胞组成 | `niche_composition_heatmap.png`、`spatial_niche.png` |
+| 各样本里每个 niche 占多少，对照和处理比 | `niche_by_sample.csv`、`niche_by_sample.png` |
+| 同一个 niche 在不同样本里的细胞组成 | `niche_composition_by_sample.csv` |
+| 哪些细胞类型挨在一起 | `misty_juxta_mean.png`（各样本的平均） |
+| 肿瘤和免疫细胞之间的配受体 | `lr_local_top.png`、`lr_global_<样本>.csv` |
+
+**5. 向用户说明的几点。**
+- niche 是 4 个样本一起聚类的，niche 编号在样本之间可以直接比较；RCTD、MISTy 和 Moran's I 是逐样本算的，表里给的是平均值。
+- 每组只有 2 个样本，`niche_by_sample.csv` 只能看趋势。要做统计检验，每组至少 3 个样本更可靠。
+- spot 不是单个细胞，所以 P1 不跑邻域富集和组间邻域差异（`nhood_enrichment.py`、`diff_nhood.py`），共定位看 MISTy。
+- 交付时把 `results/provenance/` 一起给用户。
+
 ## 笔记本和报告
 
 - 每个 `.py` 在 `notebooks/` 下有同名 JupyterLab 笔记本（代码相同，加了小节标题和结果说明）；改了 `.py` 后运行 `python tools/make_notebooks.py` 同步。用户想逐格运行时给笔记本，流程化运行用 `.py`。
